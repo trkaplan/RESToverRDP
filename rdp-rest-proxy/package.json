@@ -1,0 +1,19 @@
+{
+  "name": "rdp-rest-proxy",
+  "version": "1.0.0",
+  "description": "API proxy client using shared files for communication",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js",
+    "dev": "nodemon proxy.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.x"
+  }
+}
