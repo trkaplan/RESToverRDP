@@ -24,7 +24,7 @@ Edit the configuration in `proxy.js` to match your environment:
 
 ```javascript
 // Shared folder path - update this to match your setup
-const SHARED_FOLDER_PATH = '/Users/user1/Documents/my-remote/test/REST_PROXY_DO_NOT_DELETE'; // Mac OS path example
+const SHARED_FOLDER_PATH = '/Users/user1/Documents/my-remote/REST_PROXY_DO_NOT_DELETE'; // Mac OS path example
 // const SHARED_FOLDER_PATH = '\\\\SERVERNAME\\SharedFolder'; // Windows UNC path example
 // const SHARED_FOLDER_PATH = 'Z:\\SharedFolder'; // Windows mapped drive example
 

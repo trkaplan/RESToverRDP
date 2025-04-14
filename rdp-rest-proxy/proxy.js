@@ -2,13 +2,14 @@
 const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
+const config = require('./config');
 
 // Configuration
-const TARGET_API = 'http://127.0.0.1:8088'; // Address of your internal REST API
+const TARGET_API = `http://127.0.0.1:${config.server.port}`; // Address of your internal REST API
 // Windows UNC path format
-const SHARED_FOLDER_PATH = '\\\\tsclient\\my-remote\\test\\REST_PROXY_DO_NOT_DELETE';
-const REQUESTS_FILE = path.join(SHARED_FOLDER_PATH, 'requests.json');
-const RESPONSES_FILE = path.join(SHARED_FOLDER_PATH, 'responses.json');
+const SHARED_FOLDER_PATH = config.sharedFolder.path;
+const REQUESTS_FILE = path.join(SHARED_FOLDER_PATH, config.sharedFolder.requestFolder + '.json');
+const RESPONSES_FILE = path.join(SHARED_FOLDER_PATH, config.sharedFolder.responseFolder + '.json');
 const POLL_INTERVAL = 200; // Check interval in milliseconds
 
 // Check if files exist
@@ -93,12 +94,15 @@ async function processRequests() {
       return;
     }
     
-    // Return if no requests
-    if (Object.keys(requests).length === 0) {
+    // Filter out empty requests
+    const pendingRequests = Object.entries(requests).filter(([_, req]) => Object.keys(req).length > 0);
+    
+    // Return if no pending requests
+    if (pendingRequests.length === 0) {
       return;
     }
 
-    console.log(`Found ${Object.keys(requests).length} pending requests`);
+    console.log(`Found ${pendingRequests.length} pending requests`);
     
     // Read responses file
     let responses = {};
@@ -115,17 +119,17 @@ async function processRequests() {
     }
     
     // Process each request
-    for (const requestId in requests) {
-      const request = requests[requestId];
-      
+    for (const [requestId, request] of pendingRequests) {
       try {
         // Make request to internal API
         console.log(`[${requestId}] Accessing test server: ${TARGET_API}${request.path}`);
         
-        // Uncomment these lines to disable proxy (useful for localhost testing)
-        // process.env.NO_PROXY = '*';
-        // process.env.HTTP_PROXY = '';
-        // process.env.HTTPS_PROXY = '';
+        // Configure proxy settings
+        if (!config.proxy.enabled) {
+          process.env.NO_PROXY = config.proxy.noProxy || '*';
+          process.env.HTTP_PROXY = config.proxy.httpProxy || '';
+          process.env.HTTPS_PROXY = config.proxy.httpsProxy || '';
+        }
         
         const response = await axios({
           method: request.method,
@@ -135,7 +139,7 @@ async function processRequests() {
           validateStatus: () => true,
           timeout: 10000,
           maxRedirects: 0,
-          // proxy: false,  // Uncomment to force disable proxy
+          proxy: !config.proxy.enabled,  // Disable proxy if configured
           maxContentLength: Infinity,
           maxBodyLength: Infinity
         });
@@ -152,10 +156,10 @@ async function processRequests() {
         await fs.writeFile(RESPONSES_FILE, JSON.stringify(responses, null, 2));
         console.log(`[${requestId}] Response updated (Status: ${response.status})`);
         
-        // Then remove request from requests file
-        delete requests[requestId];
+        // Then update request to empty object instead of deleting
+        requests[requestId] = {};
         await fs.writeFile(REQUESTS_FILE, JSON.stringify(requests, null, 2));
-        console.log(`[${requestId}] Request processed and removed`);
+        console.log(`[${requestId}] Request processed and updated to empty object`);
         
         // Exit loop after processing
         break;
@@ -177,10 +181,10 @@ async function processRequests() {
         await fs.writeFile(RESPONSES_FILE, JSON.stringify(responses, null, 2));
         console.log(`[${requestId}] Error response written`);
         
-        // Then remove request from requests file
-        delete requests[requestId];
+        // Then update request to empty object instead of deleting
+        requests[requestId] = {};
         await fs.writeFile(REQUESTS_FILE, JSON.stringify(requests, null, 2));
-        console.log(`[${requestId}] Request removed after error`);
+        console.log(`[${requestId}] Request updated to empty object after error`);
         
         // Exit loop after error
         break;

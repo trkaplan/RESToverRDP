@@ -4,15 +4,16 @@ const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
+const config = require('./config');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 // Path to the shared folder (where the shared folder is mounted on Mac OS)
-const SHARED_FOLDER_PATH = '/Users/user1/Documents/my-remote/test/REST_PROXY_DO_NOT_DELETE';
-const REQUESTS_FILE = path.join(SHARED_FOLDER_PATH, 'requests.json');
-const RESPONSES_FILE = path.join(SHARED_FOLDER_PATH, 'responses.json');
+const SHARED_FOLDER_PATH = config.sharedFolder.path;
+const REQUESTS_FILE = path.join(SHARED_FOLDER_PATH, config.sharedFolder.requestFolder + '.json');
+const RESPONSES_FILE = path.join(SHARED_FOLDER_PATH, config.sharedFolder.responseFolder + '.json');
 
 // Check if files exist, create them if they don't
 async function initializeFiles() {
@@ -95,9 +96,8 @@ app.all('*', async (req, res) => {
           delete responses[requestId];
           await fs.writeFile(RESPONSES_FILE, JSON.stringify(responses, null, 2));
           
-          // Remove request from file
-          requests = JSON.parse(await fs.readFile(REQUESTS_FILE, 'utf8'));
-          delete requests[requestId];
+          // Update request to empty object instead of deleting
+          requests[requestId] = {};
           await fs.writeFile(REQUESTS_FILE, JSON.stringify(requests, null, 2));
         }
       } catch (error) {
@@ -132,7 +132,7 @@ app.get('/health', (req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || config.server.port;
 
 async function startServer() {
   await initializeFiles();
