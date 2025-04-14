@@ -42,6 +42,38 @@ The project consists of two main components:
   7. Make sure "Read-only" is unchecked if you need write access
   8. Click "Save" to apply the changes
 
+### Proxy Settings
+
+The RDP proxy respects system-level proxy settings by default. This means:
+1. If you have proxy settings configured in your environment (via `export` or system settings), these will be used automatically
+2. If no proxy is configured in your environment, direct connections will be used
+
+You can configure proxy settings in two ways:
+
+1. **Using system proxy settings** (default behavior):
+```javascript
+// Your system's proxy settings will be used automatically
+// Example of setting proxy at system level:
+export HTTP_PROXY="http://proxy.company.com:8080"
+export HTTPS_PROXY="http://proxy.company.com:8080"
+```
+
+2. **Disabling proxy** (for localhost testing):
+   If you need to bypass proxy for local development (e.g., when using test-server.js), uncomment these lines in rdp-rest-proxy/proxy.js:
+```javascript
+// In rdp-rest-proxy/proxy.js
+
+// Uncomment these lines to disable proxy
+// process.env.NO_PROXY = '*';
+// process.env.HTTP_PROXY = '';
+// process.env.HTTPS_PROXY = '';
+
+const response = await axios({
+  // ... other options ...
+  // proxy: false,  // Uncomment to force disable proxy
+});
+```
+
 ### Start the Local Target Server:**
     A simple test server (`test-server.js`) is included. Run it in a terminal:
     ```bash

@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json());
 
 // Path to the shared folder (where the shared folder is mounted on Mac OS)
-const SHARED_FOLDER_PATH = '/Users/user/Documents/my-remote/test/REST_PROXY_DO_NOT_DELETE';
+const SHARED_FOLDER_PATH = '/Users/user1/Documents/my-remote/test/REST_PROXY_DO_NOT_DELETE';
 const REQUESTS_FILE = path.join(SHARED_FOLDER_PATH, 'requests.json');
 const RESPONSES_FILE = path.join(SHARED_FOLDER_PATH, 'responses.json');
 

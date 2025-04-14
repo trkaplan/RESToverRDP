@@ -122,10 +122,10 @@ async function processRequests() {
         // Make request to internal API
         console.log(`[${requestId}] Accessing test server: ${TARGET_API}${request.path}`);
         
-        // Disable proxy settings
-        process.env.NO_PROXY = '*';
-        process.env.HTTP_PROXY = '';
-        process.env.HTTPS_PROXY = '';
+        // Uncomment these lines to disable proxy (useful for localhost testing)
+        // process.env.NO_PROXY = '*';
+        // process.env.HTTP_PROXY = '';
+        // process.env.HTTPS_PROXY = '';
         
         const response = await axios({
           method: request.method,
@@ -134,8 +134,8 @@ async function processRequests() {
           data: request.body,
           validateStatus: () => true,
           timeout: 10000,
-          proxy: false,
           maxRedirects: 0,
+          // proxy: false,  // Uncomment to force disable proxy
           maxContentLength: Infinity,
           maxBodyLength: Infinity
         });
