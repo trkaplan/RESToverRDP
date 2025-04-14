@@ -36,10 +36,10 @@ async function initializeFiles() {
   }
 }
 
-// Catch all API requests
-app.all('/api/*', async (req, res) => {
+// Catch all requests
+app.all('*', async (req, res) => {
   const requestId = uuidv4();
-  const path = req.originalUrl.replace('/api', '');
+  const path = req.originalUrl;
   
   try {
     // Create request object

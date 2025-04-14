@@ -109,10 +109,19 @@ GET /health
 
 Returns the status of the proxy server and information about the shared folder connection.
 
-### API Proxying
+### Request Proxying
 
 ```
-ANY /api/*
+ANY /*
 ```
 
-All requests to `/api/*` are forwarded to the internal API through the file-based proxy mechanism.
+All requests are forwarded to the internal API through the file-based proxy mechanism.
+
+Example:
+```bash
+# Using curl
+curl http://localhost:3000/users/1
+
+# Using Postman
+GET http://localhost:3000/users/1
+```

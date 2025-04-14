@@ -120,8 +120,19 @@ Since the components run on different machines, you'll need to install them sepa
 
 3. Make requests to the local proxy
    ```
-   http://localhost:3000/api/your-endpoint
+   http://localhost:3000/your-endpoint
    ```
+
+   Example:
+   ```bash
+   # Using curl
+   curl http://localhost:3000/users/1
+
+   # Using Postman
+   # Set URL to: http://localhost:3000/your-endpoint
+   ```
+
+The proxy supports all HTTP methods (GET, POST, PUT, DELETE, etc.) and forwards your request headers and bodies to the internal API.
 
 ## Configuration
 
