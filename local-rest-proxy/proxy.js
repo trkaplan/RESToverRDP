@@ -3,11 +3,15 @@ const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
+const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const config = require('./config');
 
 const app = express();
 app.use(cors());
+app.use(bodyParser.json({
+    strict: false // Allow non-object values like null
+}));
 app.use(express.json());
 
 // Path to the shared folder
@@ -39,21 +43,43 @@ function log(level, message, data = {}) {
 
 // File locking mechanism
 async function lockFile(filePath) {
-    const lockPath = `${filePath}.lock`;
     try {
-        await fs.writeFile(lockPath, '');
+        const lockFile = `${filePath}.lock`;
+        // Ensure parent directory exists
+        await fs.mkdir(path.dirname(lockFile), { recursive: true });
+        
+        // Try to create lock file
+        await fs.writeFile(lockFile, process.pid.toString(), { flag: 'wx' });
         return true;
     } catch (error) {
+        if (error.code === 'EEXIST') {
+            // Lock file already exists
+            return false;
+        }
+        // Create parent dirs if they don't exist and retry once
+        if (error.code === 'ENOENT') {
+            try {
+                await fs.mkdir(path.dirname(lockFile), { recursive: true });
+                await fs.writeFile(lockFile, process.pid.toString(), { flag: 'wx' });
+                return true;
+            } catch (retryError) {
+                return false;
+            }
+        }
         return false;
     }
 }
 
 async function unlockFile(filePath) {
-    const lockPath = `${filePath}.lock`;
     try {
-        await fs.unlink(lockPath);
+        const lockFile = `${filePath}.lock`;
+        await fs.unlink(lockFile);
         return true;
     } catch (error) {
+        // If lock file doesn't exist, that's fine
+        if (error.code === 'ENOENT') {
+            return true;
+        }
         return false;
     }
 }
@@ -114,27 +140,49 @@ app.all('*', async (req, res) => {
         const POLL_INTERVAL = 100; // 200ms polling interval
         const MAX_ATTEMPTS = 300; // 30 seconds timeout (200ms * 150)
         
-        while (!response && attempts < MAX_ATTEMPTS) {
+        let responseFound = false;
+        while (!responseFound && attempts < MAX_ATTEMPTS) {
             try {
                 // Try to lock and read response file
                 if (await lockFile(responseFile)) {
                     try {
-                        const responseData = await fs.readFile(responseFile, 'utf8');
-                        response = JSON.parse(responseData);
-                        const elapsedTime = Date.now() - startTime;
-                        log('INFO', `Response found`, { 
-                            requestId, 
-                            response,
-                            elapsedTime,
-                            attempts
-                        });
-                        
-                        // Delete response file after reading
-                        await fs.unlink(responseFile);
-                        
-                        // Delete request file after successful response
-                        await fs.unlink(requestFile);
-                        log('INFO', `Request and response files cleaned up`, { requestId });
+                        // Check if response is complete by looking for .done file
+                        const doneFile = `${responseFile}.done`;
+                        const [doneExists, responseExists] = await Promise.all([
+                            fs.access(doneFile).then(() => true).catch(() => false),
+                            fs.access(responseFile).then(() => true).catch(() => false)
+                        ]);
+
+                        if (doneExists && responseExists) {
+                            // Read and parse response
+                            const responseData = await fs.readFile(responseFile, 'utf8');
+                            log('DEBUG', `Read response file`, { requestId, data: responseData });
+                            
+                            try {
+                                response = JSON.parse(responseData);
+                                const elapsedTime = Date.now() - startTime;
+                                log('INFO', `Response found`, { 
+                                    requestId, 
+                                    response,
+                                    elapsedTime,
+                                    attempts
+                                });
+                                responseFound = true;
+                                break;
+                            } catch (parseError) {
+                                log('ERROR', `Failed to parse response`, { 
+                                    requestId, 
+                                    error: parseError.message,
+                                    data: responseData
+                                });
+                            }
+                        } else {
+                            log('DEBUG', `Response not ready yet`, { 
+                                requestId,
+                                doneExists,
+                                responseExists
+                            });
+                        }
                     } finally {
                         await unlockFile(responseFile);
                     }
@@ -177,46 +225,60 @@ app.all('*', async (req, res) => {
             });
         }
         
-        // Send response
-        log('INFO', `Sending response to client`, { 
-            requestId, 
-            status: response.statusCode,
-            elapsedTime: Date.now() - startTime
-        });
-        return res.status(response.statusCode || 200)
-            .set(response.headers || {})
-            .send(response.body || {});
+        if (response && !res.headersSent) {
+            try {
+                // Send response to client
+                log('DEBUG', `Preparing to send response to client`, { 
+                    requestId,
+                    statusCode: response.statusCode,
+                    headers: response.headers
+                });
+                
+                res.status(response.statusCode || 200)
+                   .set(response.headers || {})
+                   .send(response.body || {});
+                
+                log('INFO', `Response sent to client`, { 
+                    requestId,
+                    statusCode: response.statusCode
+                });
+            } catch (error) {
+                log('ERROR', `Error sending response`, { 
+                    requestId, 
+                    error: error.message 
+                });
+                if (!res.headersSent) {
+                    res.status(500).send({ error: 'Internal Server Error' });
+                }
+                return;
+            }
             
-    } catch (error) {
-        log('ERROR', `Error handling request`, { 
-            requestId, 
-            error: error.message,
-            stack: error.stack
-        });
-        
-        // Clean up files in case of error
-        try {
-            const requestFile = path.join(REQUESTS_DIR, `${requestId}.json`);
-            const responseFile = path.join(RESPONSES_DIR, `${requestId}.json`);
-            
-            // Try to delete both files if they exist
-            await Promise.all([
-                fs.unlink(requestFile).catch(() => {}),
-                fs.unlink(responseFile).catch(() => {})
-            ]);
-            
-            log('INFO', `Cleaned up files after error`, { requestId });
-        } catch (cleanupError) {
-            log('ERROR', `Error during cleanup`, { 
-                requestId,
-                error: cleanupError.message 
-            });
+            try {
+                // Clean up files only after successful response
+                log('DEBUG', `Starting file cleanup`, { requestId });
+                const doneFile = `${responseFile}.done`;
+                await Promise.all([
+                    fs.unlink(responseFile).catch(() => {}),
+                    fs.unlink(doneFile).catch(() => {}),
+                    fs.unlink(requestFile).catch(() => {})
+                ]);
+                
+                log('INFO', `Request and response files cleaned up`, { requestId });
+            } catch (error) {
+                log('ERROR', `Error cleaning up files`, { 
+                    requestId, 
+                    error: error.message 
+                });
+            }
         }
-        
-        return res.status(500).json({ 
-            error: 'Internal Server Error', 
-            message: error.message 
-        });
+    } catch (error) {
+        // Only send error response if we haven't sent any response yet
+        if (!res.headersSent) {
+            log('ERROR', `Error processing request`, { requestId, error: error.message });
+            res.status(500).json({ error: 'Internal Server Error', message: error.message });
+        } else {
+            log('ERROR', `Error after response sent`, { requestId, error: error.message });
+        }
     }
 });
 
@@ -238,3 +300,5 @@ async function startServer() {
 }
 
 startServer();
+
+module.exports = app;

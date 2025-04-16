@@ -149,10 +149,13 @@ async function processRequests() {
                             return;
                         }
                         
-                        log('INFO', `Processing request`, { 
+                        log('INFO', `Processing request`, {
                             requestId: requestData.id,
                             method: requestData.method,
-                            path: requestData.path
+                            path: requestData.path,
+                            url: `${TARGET_API}${requestData.path}`,
+                            headers: requestData.headers,
+                            body: requestData.body
                         });
                         
                         // Make request to internal API with retries
@@ -189,6 +192,7 @@ async function processRequests() {
                         
                         // Write response
                         const responseFile = path.join(RESPONSES_DIR, `${requestData.id}.json`);
+                        const doneFile = `${responseFile}.done`;
                         const responseData = {
                             statusCode: response.status,
                             headers: response.headers,
@@ -196,11 +200,25 @@ async function processRequests() {
                             timestamp: Date.now()
                         };
                         
-                        await fs.writeFile(responseFile, JSON.stringify(responseData, null, 2));
-                        log('INFO', `Response written`, { 
-                            requestId: requestData.id,
-                            status: response.status
-                        });
+                        // Lock response file before writing
+                        if (!await lockFile(responseFile)) {
+                            throw new Error('Could not lock response file');
+                        }
+                        
+                        try {
+                            // First write the response file
+                            await fs.writeFile(responseFile, JSON.stringify(responseData, null, 2));
+                            
+                            // Then create the done file to signal completion
+                            await fs.writeFile(doneFile, '');
+                            
+                            log('INFO', `Response written`, { 
+                                requestId: requestData.id,
+                                status: response.status
+                            });
+                        } finally {
+                            await unlockFile(responseFile);
+                        }
                         
                         // Update request status
                         requestData.status = 'completed';
