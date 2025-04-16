@@ -1,14 +1,14 @@
 module.exports = {
-    // Server configuration
-    server: {
-        port: 8088
-    },
-    
     // Shared folder configuration
     sharedFolder: {
-        path: '\\\\tsclient\\my-remote\\REST_PROXY_DO_NOT_DELETE',
+        path: '\\\\tsclient\\shared-folder\\REST_PROXY_DO_NOT_DELETE',
         requestFolder: 'requests',
         responseFolder: 'responses'
+    },
+    
+    // Target API configuration
+    targetApi: {
+        url: 'http://127.0.0.1:8088'  // Full URL of the target API
     },
     
     // Proxy configuration
@@ -22,7 +22,6 @@ module.exports = {
     
     // Logging configuration
     logging: {
-        level: 'info',
-        file: 'rdp-proxy.log'
+        level: 'info'
     }
 }; 
